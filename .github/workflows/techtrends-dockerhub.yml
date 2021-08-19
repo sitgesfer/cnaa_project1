@@ -6,8 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      working-directory: ./project
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -23,7 +21,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
-          context: .
+          context: ./project
           file: ./Dockerfile
           platforms: linux/arm64
           push: true
