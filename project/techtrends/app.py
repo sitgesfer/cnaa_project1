@@ -1,14 +1,21 @@
+import logging
 import sqlite3
+import sys
 
-from flask import Flask, jsonify, json, render_template, request, url_for, redirect, flash
-from werkzeug.exceptions import abort
+from flask import Flask, json, render_template, request, url_for, redirect, flash, has_request_context, session
+from logging.config import dictConfig
 
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
     connection = sqlite3.connect('database.db')
     connection.row_factory = sqlite3.Row
+    if 'dbconnections' in session:
+        session['dbconnections'] += 1
+    else:
+        session['dbconnections'] = 0
     return connection
+
 
 # Function to get a post using its ID
 def get_post(post_id):
@@ -18,7 +25,42 @@ def get_post(post_id):
     connection.close()
     return post
 
-# Define the Flask application
+
+# Function to get number of posts in database
+def get_posts_count():
+    connection = get_db_connection()
+    posts = connection.execute('SELECT COUNT(*) AS count FROM posts').fetchone()
+    connection.close()
+    return posts['count']
+
+
+class RequestFormatter(logging.Formatter):
+    def format(self, record):
+        if has_request_context():
+            record.url = request.url
+            record.remote_addr = request.remote_addr
+        else:
+            record.url = ''
+            record.remote_addr = ''
+
+        return super().format(record)
+
+
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://sys.stderr',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['wsgi']
+    }
+})
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your secret key'
 
@@ -34,16 +76,21 @@ def index():
 # If the post ID is not found a 404 page is shown
 @app.route('/<int:post_id>')
 def post(post_id):
+    ip = request.remote_addr
     post = get_post(post_id)
     if post is None:
+      app.logger.info('Non-existing post')
       return render_template('404.html'), 404
     else:
+      app.logger.info('Post read')
       return render_template('post.html', post=post)
 
 # Define the About Us page
 @app.route('/about')
 def about():
+    app.logger.info('About page read')
     return render_template('about.html')
+
 
 # Define the post creation functionality 
 @app.route('/create', methods=('GET', 'POST'))
@@ -60,11 +107,49 @@ def create():
                          (title, content))
             connection.commit()
             connection.close()
-
+            app.logger.info("New article created with title {}".format(title))
             return redirect(url_for('index'))
 
     return render_template('create.html')
 
+
+@app.route('/healthz')
+def healthcheck():
+    response = app.response_class(
+        response=json.dumps({"result":"OK - healthy"}),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
+
+
+@app.route('/metrics')
+def metrics():
+    count = get_posts_count()
+    if 'dbconnections' in session:
+        dbconnections = session['dbconnections']
+    else:
+        dbconnections = 0
+    response = app.response_class(
+        response=json.dumps({"post_count": count, "db_connections": dbconnections}),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
+
+
 # start the application on port 3111
 if __name__ == "__main__":
-   app.run(host='0.0.0.0', port='3111')
+    formatter = RequestFormatter(
+        '[%(asctime)s] %(remote_addr)s - %(url)s %(levelname)s in %(module)s: %(message)s'
+    )
+    fileHandler = logging.FileHandler("app.log")
+    fileHandler.setLevel(logging.DEBUG)
+    fileHandler.setFormatter(formatter)
+    errHandler = logging.StreamHandler(sys.stdout)
+    errHandler.setLevel(logging.DEBUG)
+    errHandler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.addHandler(fileHandler)
+    root.addHandler(errHandler)
+    app.run(host='0.0.0.0', port='3111')
