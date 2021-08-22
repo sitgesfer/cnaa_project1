@@ -21,7 +21,11 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         resources:
           requests:
-{{ toYaml .Values.resources | indent 12 }}
+            cpu: {{ .Values.requests.cpu }}
+            memory: {{ .Values.requests.memory }}
+          limits:
+            cpu: {{ .Values.limits.cpu }}
+            memory: {{ .Values.limits.memory }}
         ports:
           - containerPort: {{ .Values.containerPort }}
         livenessProbe:
