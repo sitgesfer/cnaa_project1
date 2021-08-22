@@ -32,7 +32,7 @@ spec:
             periodSeconds: 5
         readinessProbe:
           httpGet:
-            path: { { .Values.readinessProbe.path } }
-            port: { { .Values.containerPort } }
+            path: {{ .Values.readinessProbe.path }}
+            port: {{ .Values.containerPort }}
             initialDelaySeconds: 5
             periodSeconds: 5
