@@ -1,0 +1,8 @@
+apiVersion: v1
+name: techtrends
+description: Project 1 from Udacity Cloud Native Nanodegree
+keywords:
+  - techtrends
+version: 1.0.0
+maintainers:
+- name: Fernando Rivas

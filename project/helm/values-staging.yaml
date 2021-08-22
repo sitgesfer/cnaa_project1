@@ -1,0 +1,31 @@
+namespace:
+  name: staging
+
+image:
+  repository: sitgesfer/techtrends
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+containerPort: 3111
+
+resources:
+  requests:
+    cpu: 300m
+    memory: 90Mi
+  limits:
+    cpu: 500m
+    memory: 128Mi
+
+livenessProbe:
+  path: /healthz
+
+readinessProbe:
+  path: /healthz
+
+service:
+  port: 5111
+  targetPort: 3111
+  protocol: TCP
+  type: ClusterIP
