@@ -5,23 +5,27 @@ import sys
 from flask import Flask, json, render_template, request, url_for, redirect, flash, has_request_context, session
 from logging.config import dictConfig
 
+
 # Function to get a database connection.
 # This function connects to database with the name `database.db`
 def get_db_connection():
-    connection = sqlite3.connect('database.db')
-    connection.row_factory = sqlite3.Row
-    if 'dbconnections' in session:
-        session['dbconnections'] += 1
-    else:
-        session['dbconnections'] = 0
-    return connection
+    try:
+        connection = sqlite3.connect('database.db')
+        connection.row_factory = sqlite3.Row
+        if 'dbconnections' in session:
+            session['dbconnections'] += 1
+        else:
+            session['dbconnections'] = 0
+        return connection
+    except Exception:
+        return False
 
 
 # Function to get a post using its ID
 def get_post(post_id):
     connection = get_db_connection()
     post = connection.execute('SELECT * FROM posts WHERE id = ?',
-                        (post_id,)).fetchone()
+                              (post_id,)).fetchone()
     connection.close()
     return post
 
@@ -29,9 +33,12 @@ def get_post(post_id):
 # Function to get number of posts in database
 def get_posts_count():
     connection = get_db_connection()
-    posts = connection.execute('SELECT COUNT(*) AS count FROM posts').fetchone()
-    connection.close()
-    return posts['count']
+    try:
+        posts = connection.execute('SELECT COUNT(*) AS count FROM posts').fetchone()
+        connection.close()
+        return posts['count']
+    except Exception:
+        return False
 
 
 class RequestFormatter(logging.Formatter):
@@ -64,13 +71,15 @@ dictConfig({
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your secret key'
 
-# Define the main route of the web application 
+
+# Define the main route of the web application
 @app.route('/')
 def index():
     connection = get_db_connection()
     posts = connection.execute('SELECT * FROM posts').fetchall()
     connection.close()
     return render_template('index.html', posts=posts)
+
 
 # Define how each individual article is rendered 
 # If the post ID is not found a 404 page is shown
@@ -79,11 +88,12 @@ def post(post_id):
     ip = request.remote_addr
     post = get_post(post_id)
     if post is None:
-      app.logger.info('Non-existing post')
-      return render_template('404.html'), 404
+        app.logger.info('Non-existing post')
+        return render_template('404.html'), 404
     else:
-      app.logger.info('Post read')
-      return render_template('post.html', post=post)
+        app.logger.info('Post read')
+        return render_template('post.html', post=post)
+
 
 # Define the About Us page
 @app.route('/about')
@@ -104,7 +114,7 @@ def create():
         else:
             connection = get_db_connection()
             connection.execute('INSERT INTO posts (title, content) VALUES (?, ?)',
-                         (title, content))
+                               (title, content))
             connection.commit()
             connection.close()
             app.logger.info("New article created with title {}".format(title))
@@ -115,11 +125,20 @@ def create():
 
 @app.route('/healthz')
 def healthcheck():
-    response = app.response_class(
-        response=json.dumps({"result":"OK - healthy"}),
-        status=200,
-        mimetype='application/json'
-    )
+    connection = get_db_connection()
+    count = get_posts_count()
+    if connection is False or count is False:
+        response = app.response_class(
+            response=json.dumps({"result": "ERROR - unhealthy"}),
+            status=500,
+            mimetype='application/json'
+        )
+    else:
+        response = app.response_class(
+            response=json.dumps({"result": "OK - healthy"}),
+            status=200,
+            mimetype='application/json'
+        )
     return response
 
 
